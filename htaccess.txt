@@ -5,7 +5,7 @@ RewriteEngine On
 # In such cases, it should be the path (relative to the document root)
 # containing this .htaccess file
  
-RewriteRule ^(lib|tmp)\/|\.(ini|php)$ - [R=404]
+RewriteRule ^(lib|tmp|DB)\/|\.(ini|php|cfn|jpg|png|jpeg|gif)$ - [R=404]
  
 RewriteCond %{REQUEST_FILENAME} !-l
 RewriteCond %{REQUEST_FILENAME} !-f

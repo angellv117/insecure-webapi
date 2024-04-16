@@ -1,9 +1,3 @@
-/*
-###-
-create database webapps;
-GRANT ALL PRIVILEGES ON webapps.* TO 'udbwebaps'@'localhost' IDENTIFIED BY 'ku>;k8ND4CN4';
-FLUSH PRIVILEGES
-*/
 
 /*use webapps;*/
 

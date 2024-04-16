@@ -1,10 +1,4 @@
 <?php 
-function loadDatabaseSettings($pathjs){
-	$string = file_get_contents($pathjs);
-	$json_a = json_decode($string, true);
-	return $json_a;
-}
-
 function getToken(){
 	//creamos el objeto fecha y obtuvimos la cantidad de segundos desde el 1ª enero 1970
 	$fecha = date_create();
@@ -23,15 +17,16 @@ function getToken(){
 	$hash_md5 = md5($cadena2);
 	return substr($hash_sha1,0,20).$hash_md5.substr($hash_sha1,20);
 }
-
+include 'DB/conection.php';
 require 'vendor/autoload.php';
 $f3 = \Base::instance();
-/*
+
 $f3->route('GET /',
 	function() {
 		echo 'Hello, world!';
 	}
 );
+/*
 $f3->route('GET /saludo/@nombre',
 	function($f3) {
 		echo 'Hola '.$f3->get('PARAMS.nombre');
@@ -51,13 +46,6 @@ $f3->route('GET /saludo/@nombre',
 
 $f3->route('POST /Registro',
 	function($f3) {
-		$dbcnf = loadDatabaseSettings('db.json');
-		$db=new DB\SQL(
-			'mysql:host=localhost;port='.$dbcnf['port'].';dbname='.$dbcnf['dbname'],
-			$dbcnf['user'],
-			$dbcnf['password']
-		);
-		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		/////// obtener el cuerpo de la peticion
 		$Cuerpo = $f3->get('BODY');
 		$jsB = json_decode($Cuerpo,true);
@@ -70,12 +58,16 @@ $f3->route('POST /Registro',
 		}
 		// TODO validar correo en json
 		// TODO Control de error de la $DB
+		$db = conection();
+		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
 			$R = $db->exec('insert into Usuario values(null,"'.$jsB['uname'].'","'.$jsB['email'].'",md5("'.$jsB['password'].'"))');
 		} catch (Exception $e) {
+			
 			echo '{"R":-2}';
 			return;
 		}
+		
 		echo "{\"R\":0,\"D\":".var_export($R,TRUE)."}";
 	}
 );
@@ -98,13 +90,6 @@ $f3->route('POST /Registro',
 
 $f3->route('POST /Login',
 	function($f3) {
-		$dbcnf = loadDatabaseSettings('db.json');
-		$db=new DB\SQL(
-			'mysql:host=localhost;port='.$dbcnf['port'].';dbname='.$dbcnf['dbname'],
-			$dbcnf['user'],
-			$dbcnf['password']
-		);
-		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		/////// obtener el cuerpo de la peticion
 		$Cuerpo = $f3->get('BODY');
 		$jsB = json_decode($Cuerpo,true);
@@ -117,13 +102,17 @@ $f3->route('POST /Login',
 		}
 		// TODO validar correo en json
 		// TODO Control de error de la $DB
+		$db = conection();
+		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
 			$R = $db->exec('Select id from  Usuario where uname ="'.$jsB['uname'].'" and password = md5("'.$jsB['password'].'");');
 		} catch (Exception $e) {
+			
 			echo '{"R":-2}';
 			return;
 		}
 		if (empty($R)){
+			
 			echo '{"R":-3}';
 			return;
 		}
@@ -131,6 +120,7 @@ $f3->route('POST /Login',
 		//file_put_contents('/tmp/log','insert into AccesoToken values('.$R[0].',"'.$T.'",now())');
 		$db->exec('Delete from AccesoToken where id_Usuario = "'.$R[0]['id'].'";');
 		$R = $db->exec('insert into AccesoToken values('.$R[0]['id'].',"'.$T.'",now())');
+		
 		echo "{\"R\":0,\"D\":\"".$T."\"}";
 	}
 );
@@ -169,12 +159,7 @@ $f3->route('POST /Imagen',
 			return;
 		}
 		
-		$dbcnf = loadDatabaseSettings('db.json');
-		$db=new DB\SQL(
-			'mysql:host=localhost;port='.$dbcnf['port'].';dbname='.$dbcnf['dbname'],
-			$dbcnf['user'],
-			$dbcnf['password']
-		);
+		$db = conection();
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		// Validar si el usuario esta en la base de datos
 		$TKN = $jsB['token'];
@@ -182,6 +167,7 @@ $f3->route('POST /Imagen',
 		try {
 			$R = $db->exec('select id_Usuario from AccesoToken where token = "'.$TKN.'"');
 		} catch (Exception $e) {
+			
 			echo '{"R":-2}';
 			return;
 		}
@@ -197,6 +183,7 @@ $f3->route('POST /Imagen',
 		$R = $db->exec('update Imagen set ruta = "img/'.$idImagen.'.'.$jsB['ext'].'" where id = '.$idImagen);
 		// Mover archivo a su nueva locacion
 		rename('tmp/'.$id_Usuario,'img/'.$idImagen.'.'.$jsB['ext']);
+		
 		echo "{\"R\":0,\"D\":".$idImagen."}";
 	}
 );
@@ -214,13 +201,6 @@ $f3->route('POST /Imagen',
 
 $f3->route('POST /Descargar',
 	function($f3) {
-		$dbcnf = loadDatabaseSettings('db.json');
-		$db=new DB\SQL(
-			'mysql:host=localhost;port='.$dbcnf['port'].';dbname='.$dbcnf['dbname'],
-			$dbcnf['user'],
-			$dbcnf['password']
-		);
-		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		/////// obtener el cuerpo de la peticion
 		$Cuerpo = $f3->get('BODY');
 		$jsB = json_decode($Cuerpo,true);
@@ -235,9 +215,12 @@ $f3->route('POST /Descargar',
 		// Comprobar que el usuario sea valido
 		$TKN = $jsB['token'];
 		$idImagen = $jsB['id'];
+		$db = conection();
+		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
 			$R = $db->exec('select id_Usuario from AccesoToken where token = "'.$TKN.'"');
 		} catch (Exception $e) {
+			
 			echo '{"R":-2}';
 			return;
 		}
@@ -246,6 +229,7 @@ $f3->route('POST /Descargar',
 		try {
 			$R = $db->exec('Select name,ruta from  Imagen where id = '.$idImagen);
 		}catch (Exception $e) {
+			
 			echo '{"R":-3}';
 			return;
 		}
@@ -255,6 +239,7 @@ $f3->route('POST /Descargar',
 		$info = pathinfo($R[0]['ruta']);
 		$web->send($R[0]['ruta'],NULL,0,TRUE,$R[0]['name'].'.'.$info['extension']);
 		$out=ob_get_clean();
+		
 		//echo "{\"R\":0,\"D\":\"".$T."\"}";
 	}
 );
