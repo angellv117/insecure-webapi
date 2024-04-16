@@ -23,6 +23,19 @@ create table if not exists Imagen(
 	PRIMARY KEY (id)
 )ENGINE=InnoDB;
 
+create table if not exists Historial(
+	id int AUTO_INCREMENT, 
+	id_Usuario int not null,
+	accion varchar(250) not null,
+	fecha datetime not null,
+	PRIMARY KEY (id)
+)ENGINE=InnoDB;
+
+
+ALTER TABLE Historial 
+ADD CONSTRAINT FK_His_U
+FOREIGN KEY (id_Usuario) REFERENCES Usuario(ID); 
+
 ALTER TABLE Usuario
 ADD CONSTRAINT U_U
 Unique (uname,email); 
