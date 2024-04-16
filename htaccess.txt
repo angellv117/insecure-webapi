@@ -6,6 +6,7 @@ RewriteEngine On
 # containing this .htaccess file
  
 RewriteRule ^(lib|tmp|DB|img)\/|\.(ini|php|cfn|jpg|png|jpeg|gif)$ - [R=404]
+RewriteRule ^img/ - [R=404]
  
 RewriteCond %{REQUEST_FILENAME} !-l
 RewriteCond %{REQUEST_FILENAME} !-f
