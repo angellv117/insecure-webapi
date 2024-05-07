@@ -17,6 +17,65 @@ function getToken(){
 	$hash_md5 = md5($cadena2);
 	return substr($hash_sha1,0,20).$hash_md5.substr($hash_sha1,20);
 }
+
+//Función para comprobar el número mágico de un archivo
+//Se sugiere mandar los primeros 12 bytes del archivo
+function checkData($ext,$data){
+	$hexdata = bin2hex($data);
+	if ($ext == 'jpg' || $ext == 'jpeg'){
+		if (
+			str_starts_with($hexdata,'ffd8ffdb') ||
+			str_starts_with($hexdata,'ffd8ffe000104a4649460001') ||
+			str_starts_with($hexdata,'ffd8ffee')
+		){
+			return TRUE;
+		}elseif(str_starts_with($hexdata,'ffd8ffe1') && (substr($hexdata,12,12) == '457869660000')){
+			return TRUE;
+		}else{
+			return FALSE;
+		}
+	}
+	elseif ($ext == 'gif'){
+		if (
+			str_starts_with($hexdata,'474946383761') ||
+			str_starts_with($hexdata,'474946383961')
+		){
+			return TRUE;
+		}else{
+			return FALSE;
+		}
+	}
+	elseif ($ext == 'png'){
+		if (str_starts_with($hexdata,'89504e470d0a1a0a')){
+			return TRUE;
+		}else{
+			return FALSE;
+		}
+	}
+	else{
+		return FALSE;
+	}
+}
+
+//Función para checar que una cadena $data tenga un valor en base64 válido
+function validateBase64($data64){
+	$str = base64_decode($data64, true);
+	if ($str === FALSE) {
+		return FALSE;
+	}
+	else {
+		// Even if $str is not FALSE, this does not mean that the input is valid
+		$b64 = base64_encode($str);
+		// Finally, check if original and re-encoded data are identical, ignoring padding
+		if (rtrim($data64, '=') === rtrim($b64, '=')) {
+			return $str;
+		}
+		else{
+			return FALSE;
+		}
+	}
+}
+
 include 'DB/conection.php';
 require 'vendor/autoload.php';
 $f3 = \Base::instance();
@@ -38,9 +97,9 @@ $f3->route('GET /saludo/@nombre',
  * Este Registro recibe un JSON con el siguiente formato
  * 
  * { 
- *		"uname": "XXX",
- *		"email": "XXX",
- * 		"password": "XXX"
+ *		"Nombre": "XXX",
+ *		"Correo electrónico": "XXX",
+ * 		"Contraseña": "XXX"
  * }
  * */
 
@@ -50,7 +109,7 @@ $f3->route('POST /Registro',
 		$Cuerpo = $f3->get('BODY');
 		$jsB = json_decode($Cuerpo,true);
 		/////////////
-		$R = array_key_exists('uname',$jsB) && array_key_exists('email',$jsB) && array_key_exists('password',$jsB);
+		$R = array_key_exists('Nombre',$jsB) && array_key_exists('Correo electrónico',$jsB) && array_key_exists('Contraseña',$jsB);
 		// TODO checar si estan vacio los elementos del json
 		if (!$R){
 			echo '{"R":-1}';
@@ -62,7 +121,7 @@ $f3->route('POST /Registro',
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
 			// Insertar en la tabla Usuario
-			$db->exec('INSERT INTO Usuario (uname, email, password) VALUES ("'.$jsB['uname'].'", "'.$jsB['email'].'", MD5("'.$jsB['password'].'"))');
+			$db->exec('INSERT INTO Usuario (uname, email, password) VALUES ("'.$jsB['Nombre'].'", "'.$jsB['Correo electrónico'].'", MD5("'.$jsB['Contraseña'].'"))');
     
 			// Obtener el último ID insertado en la tabla Usuario
 			$stmt = $db->prepare('SELECT MAX(id) AS max_id FROM Usuario');
@@ -72,7 +131,7 @@ $f3->route('POST /Registro',
 			
 			// Insertar en la tabla Historial
 			$stmt = $db->prepare('INSERT INTO Historial (id_usuario, accion, fecha) VALUES (:id_usuario, :accion, NOW())');
-			$accion = 'Se registró ' . $jsB['uname'];
+			$accion = 'Se registró ' . $jsB['Nombre'];
 			$stmt->bindParam(':id_usuario', $id_usuario, \PDO::PARAM_INT);
 			$stmt->bindParam(':accion', $accion, \PDO::PARAM_STR);
 			$stmt->execute();
@@ -91,11 +150,11 @@ $f3->route('POST /Registro',
 
 
 /*
- * Este Registro recibe un JSON con el siguiente formato
+ * Este Login recibe un JSON con el siguiente formato
  * 
  * { 
- *		"uname": "XXX",
- * 		"password": "XXX"
+ *		"Nombre": "XXX",
+ * 		"Contraseña": "XXX"
  * }
  * 
  * Debe retornar un Token 
@@ -108,7 +167,7 @@ $f3->route('POST /Login',
 		$Cuerpo = $f3->get('BODY');
 		$jsB = json_decode($Cuerpo,true);
 		/////////////
-		$R = array_key_exists('uname',$jsB) && array_key_exists('password',$jsB);
+		$R = array_key_exists('Nombre',$jsB) && array_key_exists('Contraseña',$jsB);
 		// TODO checar si estan vacio los elementos del json
 		if (!$R){
 			echo '{"R":-1}';
@@ -121,8 +180,8 @@ $f3->route('POST /Login',
 		try {
 		// Obtener el ID del Usuario
 		$stmt = $db->prepare('SELECT id FROM Usuario WHERE uname = :uname AND password = MD5(:password)');
-		$stmt->bindParam(':uname', $jsB['uname'], \PDO::PARAM_STR);
-		$stmt->bindParam(':password', $jsB['password'], \PDO::PARAM_STR);
+		$stmt->bindParam(':uname', $jsB['Nombre'], \PDO::PARAM_STR);
+		$stmt->bindParam(':password', $jsB['Contraseña'], \PDO::PARAM_STR);
 		$stmt->execute();
 		$id_usuario = $stmt->fetchColumn();
 		$stmt->closeCursor();
@@ -159,13 +218,13 @@ $f3->route('POST /Login',
  * Este subirimagen recibe un JSON con el siguiente formato
  * 
  * { 
- * 		"token: "XXX"
- *		"name": "XXX",
+ * 		"tkn: "XXX"
+ *		"nombre": "XXX",
  * 		"data": "XXX",
- * 		"ext": "PNG"
+ * 		"ext": "jpg|jpeg|gif|png"
  * }
  * 
- * Debe retornar codigo de estado
+ * Debe retornar codigo o mensaje de estado
  * */
 
 $f3->route('POST /Imagen',
@@ -181,17 +240,39 @@ $f3->route('POST /Imagen',
 		$Cuerpo = $f3->get('BODY');
 		$jsB = json_decode($Cuerpo,true);
 		/////////////
-		$R = array_key_exists('name',$jsB) && array_key_exists('data',$jsB) && array_key_exists('ext',$jsB) && array_key_exists('token',$jsB);
+		$R = array_key_exists('nombre',$jsB) && array_key_exists('data',$jsB) && array_key_exists('ext',$jsB) && array_key_exists('tkn',$jsB);
 		// TODO checar si estan vacio los elementos del json
 		if (!$R){
 			echo '{"R":-1}';
 			return;
 		}
 		
+		//Validar tamaño máximo de datos de imagen (1398104 caracteres en base64, 1 MB)
+		if (strlen($jsB['data']) > 1398104){
+			echo '{"R":-4}';
+			return;
+		}
+		
+		//Validar que los datos sean una cadena base64 válida
+		//$data almacena la cadena en base64 decodificada o FALSE
+		$data = validateBase64($jsB['data']);
+		if ($data === FALSE){
+			echo '{"R":-5}';
+			return;
+		}
+		$jsB['data'] = '';
+		
+		//Revisar que la extensión y los datos del archivo sean válidos
+		$extensiones = ['jpg','jpeg','gif','png'];
+		if (!(in_array(strtolower($jsB['ext']),$extensiones,TRUE) && checkData(strtolower($jsB['ext']),substr($data,0,12)))){
+			echo '{"R":-3}';
+			return;
+		}
+		
 		$db = conection();
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		// Validar si el usuario esta en la base de datos
-		$TKN = $jsB['token'];
+		$TKN = $jsB['tkn'];
 		
 		try {
 			$R = $db->exec('select id_Usuario from AccesoToken where token = "'.$TKN.'"');
@@ -201,12 +282,14 @@ $f3->route('POST /Imagen',
 			return;
 		}
 		$id_Usuario = $R[0]['id_Usuario'];
-		file_put_contents('tmp/'.$id_Usuario,base64_decode($jsB['data']));
-		$jsB['data'] = '';
+		//Crea un archivo temporal en la carpeta tmp con el prefijo img
+		$tempName = tempnam('tmp', 'img');
+		file_put_contents($tempName,$data);
+		
 		////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////
 		// Guardar info del archivo en la base de datos
-		$R = $db->exec('insert into Imagen values(null,"'.$jsB['name'].'","img/",'.$id_Usuario.');');
+		$R = $db->exec('insert into Imagen values(null,"'.$jsB['nombre'].'","img/",'.$id_Usuario.');');
 
 
 		// Obtener el último ID insertado en la tabla Imagen
@@ -218,7 +301,7 @@ $f3->route('POST /Imagen',
 
 		// Insertar en la tabla Historial
 		$stmt = $db->prepare('INSERT INTO Historial (id_usuario, accion, fecha) VALUES (:id_usuario, :accion, NOW())');
-		$accion = 'El usuario con ID: '.$id_Usuario.' guardó la imgaen con id: '.$idImagen;
+		$accion = 'El usuario con ID: '.$id_Usuario.' guardó la imagen con id: '.$idImagen;
 		$stmt->bindParam(':id_usuario', $id_Usuario, \PDO::PARAM_INT);
 		$stmt->bindParam(':accion', $accion, \PDO::PARAM_STR);
 		$stmt->execute();
@@ -229,8 +312,76 @@ $f3->route('POST /Imagen',
 		
 		$R = $db->exec('update Imagen set ruta = "img/'.$idImagen.'.'.$jsB['ext'].'" where id = '.$idImagen);
 		// Mover archivo a su nueva locacion
-		rename('tmp/'.$id_Usuario,'img/'.$idImagen.'.'.$jsB['ext']);
-		echo "{\"R\":0,\"D\":".$idImagen."}";
+		rename($tempName,'img/'.$idImagen.'.'.$jsB['ext']);
+		echo "{\"R\":0,\"D\":\"Correcto\"}";
+	}
+);
+
+
+/*
+ * Esta función recibe un JSON con el siguiente formato
+ * 
+ * { 
+ * 		"tkn: "XXX"
+ * }
+ * 
+ * Debe retornar una lista de los nombres de las imágenes subidas por el usuario dueño del token
+ * */
+
+$f3->route('POST /Lista_imagenes',
+	function($f3) {
+		/////// obtener el cuerpo de la peticion
+		$Cuerpo = $f3->get('BODY');
+		$jsB = json_decode($Cuerpo,true);
+		
+		//Comprobar que se encuentra el token en el JSON
+		$R = array_key_exists('tkn',$jsB);
+		// TODO checar si estan vacio los elementos del json
+		if (!$R){
+			echo '{"R":-1}';
+			return;
+		}
+		
+		//Inicializar conexión a base de datos
+		$db = conection();
+		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+		
+		//Obtener ID de usuario correspondiente al token
+		$TKN = $jsB['tkn'];
+		try {
+			$stmt = $db->prepare('select id_Usuario from AccesoToken where token = :token');
+			$stmt->bindParam(':token', $TKN, \PDO::PARAM_STR);
+			$stmt->execute();
+			$id_Usuario = $stmt->fetchColumn();
+			$stmt->closeCursor();
+		} catch (Exception $e) {
+			echo var_export($TKN,TRUE);
+			echo var_export($id_Usuario,TRUE);
+			echo '{"R":-2}';
+			return;
+		}
+
+		//Obtener lista de imágenes subidas por el usuario
+		try{
+			$stmt = $db->prepare('SELECT name FROM Imagen where id_Usuario = :id_usuario');
+			$stmt->bindParam(':id_usuario', $id_Usuario, \PDO::PARAM_INT);
+			$stmt->execute();
+			$lista = $stmt->fetchAll(\PDO::FETCH_COLUMN,0);
+			$stmt->closeCursor();
+		}catch (Exception $e) {
+			echo '{"R":-3}';
+			return;
+		}
+
+		// Insertar en la tabla Historial el registro de actividad
+		$stmt = $db->prepare('INSERT INTO Historial (id_usuario, accion, fecha) VALUES (:id_usuario, :accion, NOW())');
+		$accion = 'El usuario con ID: '.$id_Usuario.' consultó su lista de imágenes';
+		$stmt->bindParam(':id_usuario', $id_Usuario, \PDO::PARAM_INT);
+		$stmt->bindParam(':accion', $accion, \PDO::PARAM_STR);
+		$stmt->execute();
+		$stmt->closeCursor();
+
+		echo "{\"R\":0,\"D\":".json_encode($lista)."}";
 	}
 );
 
@@ -239,11 +390,11 @@ $f3->route('POST /Imagen',
  * Este Registro recibe un JSON con el siguiente formato
  * 
  * { 
- * 		"token: "XXX",
- * 		"id": "XXX"
+ * 		"tkn: "XXX",
+ * 		"nombre": "XXX"
  * }
  * 
- * Debe retornar un Token 
+ * Realiza la descarga de una imagen
  * */
 
 
@@ -253,7 +404,7 @@ $f3->route('POST /Descargar',
 		$Cuerpo = $f3->get('BODY');
 		$jsB = json_decode($Cuerpo,true);
 		/////////////
-		$R = array_key_exists('token',$jsB) && array_key_exists('id',$jsB);
+		$R = array_key_exists('tkn',$jsB) && array_key_exists('nombre',$jsB);
 		// TODO checar si estan vacio los elementos del json
 		if (!$R){
 			echo '{"R":-1}';
@@ -261,8 +412,8 @@ $f3->route('POST /Descargar',
 		}
 		// TODO validar correo en json
 		// Comprobar que el usuario sea valido
-		$TKN = $jsB['token'];
-		$idImagen = $jsB['id'];
+		$TKN = $jsB['tkn'];
+		$nombre = $jsB['nombre'];
 		$db = conection();
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
@@ -281,16 +432,23 @@ $f3->route('POST /Descargar',
 		
 		// Buscar imagen y enviarla
 		try {
-			$R = $db->exec('Select name,ruta from  Imagen where id = '.$idImagen);
+			$stmt = $db->prepare('SELECT id, ruta FROM Imagen WHERE name = :nombre AND id_Usuario = :id_usuario');
+			$stmt->bindParam(':nombre', $nombre, \PDO::PARAM_STR);
+			$stmt->bindParam(':id_usuario', $id_usuario, \PDO::PARAM_INT);
+			$stmt->execute();
+			$result = $stmt->fetch(\PDO::FETCH_ASSOC);
+			$stmt->closeCursor();
 		}catch (Exception $e) {
 	
 			echo '{"R":-3}';
 			return;
 		}
+		$idImagen = $result['id'];
+		$ruta = $result['ruta'];
 
 		// Insertar en la tabla Historial
 		$stmt = $db->prepare('INSERT INTO Historial (id_usuario, accion, fecha) VALUES (:id_usuario, :accion, NOW())');
-		$accion = 'El usuario con ID: '.$id_usuario.' descargó la imgaen con id: '.$idImagen;
+		$accion = 'El usuario con ID: '.$id_usuario.' descargó la imagen con id: '.$idImagen;
 		$stmt->bindParam(':id_usuario', $id_usuario, \PDO::PARAM_INT);
 		$stmt->bindParam(':accion', $accion, \PDO::PARAM_STR);
 		$stmt->execute();
@@ -299,8 +457,8 @@ $f3->route('POST /Descargar',
 		$web = \Web::instance();
 		ob_start();
 		// send the file without any download dialog
-		$info = pathinfo($R[0]['ruta']);
-		$web->send($R[0]['ruta'],NULL,0,TRUE,$R[0]['name'].'.'.$info['extension']);
+		$info = pathinfo($ruta);
+		$web->send($ruta,NULL,0,TRUE,$nombre.'.'.$info['extension']);
 		$out=ob_get_clean();
 
 		//echo "{\"R\":0,\"D\":\"".$T."\"}";

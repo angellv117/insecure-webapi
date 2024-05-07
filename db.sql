@@ -46,4 +46,6 @@ FOREIGN KEY (id_Usuario) REFERENCES Usuario(ID);
 
 ALTER TABLE Imagen 
 ADD CONSTRAINT FK_I_U
-FOREIGN KEY (id_Usuario) REFERENCES Usuario(ID); 
+FOREIGN KEY (id_Usuario) REFERENCES Usuario(ID),
+ADD CONSTRAINT U_Name_U
+UNIQUE (name,id_Usuario);
