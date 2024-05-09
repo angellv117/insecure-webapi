@@ -121,7 +121,12 @@ $f3->route('POST /Registro',
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
 			// Insertar en la tabla Usuario
-			$db->exec('INSERT INTO Usuario (uname, email, password) VALUES ("'.$jsB['Nombre'].'", "'.$jsB['Correo electrónico'].'", MD5("'.$jsB['Contraseña'].'"))');
+			$stmt = $db->prepare('INSERT INTO Usuario (uname, email, password) VALUES (:uname, :email, MD5(:password))');
+			$stmt->bindParam(':uname', $jsB['Nombre'], \PDO::PARAM_STR);
+			$stmt->bindParam(':email', $jsB['Correo electrónico'], \PDO::PARAM_STR);
+			$stmt->bindParam(':password', $jsB['Contraseña'], \PDO::PARAM_STR);
+			$stmt->execute();
+			$stmt->closeCursor();
     
 			// Obtener el último ID insertado en la tabla Usuario
 			$stmt = $db->prepare('SELECT MAX(id) AS max_id FROM Usuario');
@@ -186,6 +191,11 @@ $f3->route('POST /Login',
 		$id_usuario = $stmt->fetchColumn();
 		$stmt->closeCursor();
 
+		//Verificar que el resultado en $id_usuario tenga el formato correcto
+		if (!(is_numeric($id_usuario) && $id_usuario >= 0)){
+			echo '{"R":-4}';
+			return;
+		}
 
 		$T = getToken();
 		// Insertar en la tabla Historial
@@ -207,8 +217,15 @@ $f3->route('POST /Login',
 		}
 		
 		//file_put_contents('/tmp/log','insert into AccesoToken values('.$R[0].',"'.$T.'",now())');
-		$R = $db->exec('Delete from AccesoToken where id_Usuario = "'.$id_usuario.'";');
-		$R = $db->exec('insert into AccesoToken values('.$id_usuario.',"'.$T.'",now())');
+		$stmt = $db->prepare('DELETE FROM AccesoToken WHERE id_Usuario = :id_usuario');
+		$stmt->bindParam(':id_usuario', $id_usuario, \PDO::PARAM_INT);
+		$stmt->execute();
+		$stmt->closeCursor();
+		$stmt = $db->prepare('INSERT INTO AccesoToken VALUES (:id_usuario, :token, now())');
+		$stmt->bindParam(':id_usuario', $id_usuario, \PDO::PARAM_INT);
+		$stmt->bindParam(':token', $T, \PDO::PARAM_STR);
+		$stmt->execute();
+		$stmt->closeCursor();
 		echo "{\"R\":0,\"D\":\"".$T."\"}";
 	}
 );
@@ -275,13 +292,16 @@ $f3->route('POST /Imagen',
 		$TKN = $jsB['tkn'];
 		
 		try {
-			$R = $db->exec('select id_Usuario from AccesoToken where token = "'.$TKN.'"');
+			$stmt = $db->prepare('SELECT id_Usuario FROM AccesoToken WHERE token = :token');
+			$stmt->bindParam(':token', $TKN, \PDO::PARAM_STR);
+			$stmt->execute();
+			$id_Usuario = $stmt->fetchColumn();
+			$stmt->closeCursor();
 		} catch (Exception $e) {
 	
 			echo '{"R":-2}';
 			return;
 		}
-		$id_Usuario = $R[0]['id_Usuario'];
 		//Crea un archivo temporal en la carpeta tmp con el prefijo img
 		$tempName = tempnam('tmp', 'img');
 		file_put_contents($tempName,$data);
@@ -289,7 +309,11 @@ $f3->route('POST /Imagen',
 		////////////////////////////////////////////////////////
 		////////////////////////////////////////////////////////
 		// Guardar info del archivo en la base de datos
-		$R = $db->exec('insert into Imagen values(null,"'.$jsB['nombre'].'","img/",'.$id_Usuario.');');
+		$stmt = $db->prepare('INSERT INTO Imagen VALUES (NULL, :nombre, "img/", :id_Usuario);');
+		$stmt->bindParam(':nombre', $jsB['nombre'], \PDO::PARAM_STR);
+		$stmt->bindParam(':id_Usuario', $id_Usuario, \PDO::PARAM_INT);
+		$stmt->execute();
+		$stmt->closeCursor();
 
 
 		// Obtener el último ID insertado en la tabla Imagen
@@ -307,12 +331,16 @@ $f3->route('POST /Imagen',
 		$stmt->execute();
 		$stmt->closeCursor();
 
-
-
+		//Actualizar ruta en la base de datos
+		$ruta = 'img/'.$idImagen.'.'.$jsB['ext'];
+		$stmt = $db->prepare('UPDATE Imagen SET ruta = :ruta WHERE id = :idImagen');
+		$stmt->bindParam(':ruta', $ruta, \PDO::PARAM_STR);
+		$stmt->bindParam(':idImagen', $idImagen, \PDO::PARAM_INT);
+		$stmt->execute();
+		$stmt->closeCursor();
 		
-		$R = $db->exec('update Imagen set ruta = "img/'.$idImagen.'.'.$jsB['ext'].'" where id = '.$idImagen);
 		// Mover archivo a su nueva locacion
-		rename($tempName,'img/'.$idImagen.'.'.$jsB['ext']);
+		rename($tempName,$ruta);
 		echo "{\"R\":0,\"D\":\"Correcto\"}";
 	}
 );
@@ -417,7 +445,6 @@ $f3->route('POST /Descargar',
 		$db = conection();
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
-			$R = $db->exec('select id_Usuario from AccesoToken where token = "'.$TKN.'"');
 			// Obtener el ID del Usuario
 			$stmt = $db->prepare('SELECT id_Usuario FROM AccesoToken WHERE token = :token');
 			$stmt->bindParam(':token', $TKN, \PDO::PARAM_STR);
