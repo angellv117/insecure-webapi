@@ -459,6 +459,7 @@ $f3->route('POST /Descargar',
 		
 		// Buscar imagen y enviarla
 		try {
+			//El uso de esta consulta verifica que la imagen le pertenezca al usuario asociado con el token proporcionado
 			$stmt = $db->prepare('SELECT id, ruta FROM Imagen WHERE name = :nombre AND id_Usuario = :id_usuario');
 			$stmt->bindParam(':nombre', $nombre, \PDO::PARAM_STR);
 			$stmt->bindParam(':id_usuario', $id_usuario, \PDO::PARAM_INT);
@@ -468,6 +469,12 @@ $f3->route('POST /Descargar',
 		}catch (Exception $e) {
 	
 			echo '{"R":-3}';
+			return;
+		}
+		if (!$result) {
+			//La consulta anterior no causó excepción pero no retornó resultados
+			//Esto significa que no se encuentra una imagen que el usuario haya subido con el nombre proporcionado.
+			echo '{"R":-4}';
 			return;
 		}
 		$idImagen = $result['id'];
