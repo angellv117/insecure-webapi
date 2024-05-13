@@ -121,10 +121,10 @@ $f3->route('POST /Registro',
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
 			// Insertar en la tabla Usuario
-			$stmt = $db->prepare('INSERT INTO Usuario (uname, email, password) VALUES (:uname, :email, MD5(:password))');
+			$stmt = $db->prepare('INSERT INTO Usuario (uname, email, password) VALUES (:uname, :email, :password)');
 			$stmt->bindParam(':uname', $jsB['Nombre'], \PDO::PARAM_STR);
 			$stmt->bindParam(':email', $jsB['Correo electrónico'], \PDO::PARAM_STR);
-			$stmt->bindParam(':password', $jsB['Contraseña'], \PDO::PARAM_STR);
+			$stmt->bindParam(':password', password_hash($jsB['Contraseña'], PASSWORD_DEFAULT), \PDO::PARAM_STR);
 			$stmt->execute();
 			$stmt->closeCursor();
     
@@ -184,12 +184,20 @@ $f3->route('POST /Login',
 		$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 		try {
 		// Obtener el ID del Usuario
-		$stmt = $db->prepare('SELECT id FROM Usuario WHERE uname = :uname AND password = MD5(:password)');
+		$stmt = $db->prepare('SELECT id, password FROM Usuario WHERE uname = :uname');
 		$stmt->bindParam(':uname', $jsB['Nombre'], \PDO::PARAM_STR);
-		$stmt->bindParam(':password', $jsB['Contraseña'], \PDO::PARAM_STR);
 		$stmt->execute();
-		$id_usuario = $stmt->fetchColumn();
+		$result = $stmt->fetch(\PDO::FETCH_ASSOC);
 		$stmt->closeCursor();
+		
+		if (!$result || !password_verify($jsB['Contraseña'],$result['password'])){
+			//El nombre de usuario no se encontró o la contraseña no pudo ser verificada
+			echo '{"R":-3}';
+			return;
+		}
+		$jsB['Contraseña'] = '';
+		$result['password'] = '';
+		$id_usuario = $result['id'];
 
 		//Verificar que el resultado en $id_usuario tenga el formato correcto
 		if (!(is_numeric($id_usuario) && $id_usuario >= 0)){
@@ -209,10 +217,6 @@ $f3->route('POST /Login',
 
 		} catch (Exception $e) {
 			echo '{"R":-2}';
-			return;
-		}
-		if (empty($id_usuario)){
-			echo '{"R":-3}';
 			return;
 		}
 		

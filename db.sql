@@ -37,8 +37,10 @@ ADD CONSTRAINT FK_His_U
 FOREIGN KEY (id_Usuario) REFERENCES Usuario(ID); 
 
 ALTER TABLE Usuario
-ADD CONSTRAINT U_U
-Unique (uname,email); 
+ADD CONSTRAINT U_name
+Unique (uname),
+ADD CONSTRAINT U_email
+Unique (email);
 
 ALTER TABLE AccesoToken 
 ADD CONSTRAINT FK_AT_U
